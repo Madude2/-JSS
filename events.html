@@ -85,28 +85,28 @@ h1,h2,h3,h4,h5,h6 { font-family: 'Western', sans-serif; }
     </div>
 
     <div class="relative mb-2">
-  <select id="event-location" class="w-full px-3 py-2 border rounded appearance-none bg-white pr-10">
-    <option value="" disabled selected>Vælg sted</option>
-    <option value="Djurske Sortkudtsskytter, Næsgårdsvej 3, 8600 Grenaa">
-      Djurske Sortkudtskytter, Næsgårdsvej 3, 8600 Grenaa
-    </option>
-    <option value="Tilst Vestervej 14, 8381 Tilst">
-      Østjyske Sortkrudtskytter, Tilst Vestervej 14, 8381 Tilst
-    </option>
-    <option value="Andet">Andet (skriv selv)</option>
-  </select>
-  <svg class="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
-  </svg>
-</div>
+      <select id="event-location" class="w-full px-3 py-2 border rounded appearance-none bg-white pr-10">
+        <option value="" disabled selected>Vælg sted</option>
+        <option value="Djurske Sortkudtsskytter, Næsgårdsvej 3, 8600 Grenaa">
+          Djurske Sortkudtsskytter, Næsgårdsvej 3, 8600 Grenaa
+        </option>
+        <option value="Tilst Vestervej 14, 8381 Tilst">
+          Østjyske Sortkrudtsskytter, Tilst Vestervej 14, 8381 Tilst
+        </option>
+        <option value="Andet">Andet (skriv selv)</option>
+      </select>
+      <svg class="absolute right-3 top-3 w-4 h-4 text-gray-500 pointer-events-none" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+      </svg>
+    </div>
 
-<!-- Hidden custom text input for "Andet" -->
-<input
-  type="text"
-  id="custom-location"
-  placeholder="Indtast sted manuelt..."
-  class="w-full mb-2 px-3 py-2 border rounded hidden"
-/>
+    <!-- Hidden custom text input for "Andet" -->
+    <input
+      type="text"
+      id="custom-location"
+      placeholder="Indtast sted manuelt..."
+      class="w-full mb-2 px-3 py-2 border rounded hidden"
+    />
 
     <textarea id="event-description" placeholder="Beskrivelse" class="w-full mb-2 px-3 py-2 border rounded"></textarea>
     <div class="flex justify-end gap-2 mt-4">
@@ -180,6 +180,9 @@ import {
 } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
 
+/* 🔔 NEW: import global notification helper */
+import { sendGlobalNotification } from "./js/common.js";
+
 const eventsContainer = document.getElementById("events-container");
 const createPopup = document.getElementById("create-popup");
 const popupTitle = document.getElementById("popup-title");
@@ -233,8 +236,6 @@ function showThrobber() {
     </div>
   `;
 }
-
-
 
 /* ---------- Show Event Card in Popup ---------- */
 async function openEventCardPopup(eventId) {
@@ -333,8 +334,6 @@ async function openEventCardPopup(eventId) {
   }
 }
 
-
-
 async function refreshPopup(eventId) {
   const popup = document.getElementById("view-event-popup");
   const content = document.getElementById("view-event-content");
@@ -372,7 +371,6 @@ if (locationSelect && customLocationInput) {
   });
 }
 
-
 /* ---------- Calendar ---------- */
 async function renderCalendar() {
   const calendarEl = document.getElementById('calendar');
@@ -381,41 +379,46 @@ async function renderCalendar() {
   const { Calendar } = window.FullCalendar;
   const snapshot = await getDocs(collection(db, "events"));
 
-// Filter out events older than 12 hours
-// Keep all valid events for the calendar
-const now = new Date();
-const twelveHoursAgo = now.getTime() - 12 * 60 * 60 * 1000;
+  // Filter out events older than 12 hours
+  const now = new Date();
+  const twelveHoursAgo = now.getTime() - 12 * 60 * 60 * 1000;
 
-const eventsData = snapshot.docs
-  .map(docSnap => ({ id: docSnap.id, ...docSnap.data() }))
-  .filter(e => {
-    if (!e.date) return false;
-    const eventTime = new Date(e.date).getTime();
-    return eventTime >= twelveHoursAgo; // show all upcoming in calendar
-  });
-
-
-
-
+  const eventsData = snapshot.docs
+    .map(docSnap => ({ id: docSnap.id, ...docSnap.data() }))
+    .filter(e => {
+      if (!e.date) return false;
+      const eventTime = new Date(e.date).getTime();
+      return eventTime >= twelveHoursAgo; // show all upcoming in calendar
+    });
 
   const events = snapshot.docs.map(docSnap => {
-    const e = docSnap.data();
-    return {
-  id: docSnap.id,
-  title: e.title,
-  start: e.date ? e.date.split("T")[0] : "", // 👈 only the date part
-  allDay: true,
-  extendedProps: { location: e.location, description: e.description }
-};
+  const e = docSnap.data();
 
-  });
+  const location = (e.location || "").toLowerCase();
+  const isTilst = location.includes("tilst");
 
+  return {
+    id: docSnap.id,
+    title: e.title,
+    start: e.date ? e.date.split("T")[0] : "",
+    allDay: true,
+
+    // Grøn hvis eventet er i Tilst, ellers blå
+    backgroundColor: isTilst ? "#16a34a" : "#2563eb",
+    borderColor: isTilst ? "#15803d" : "#1d4ed8",
+    textColor: "#ffffff",
+
+    extendedProps: { 
+      location: e.location, 
+      description: e.description 
+    }
+  };
+});
   if (calendar) {
-  calendar.destroy(); // 🧹 remove old instance before re-rendering
-}
+    calendar.destroy(); // 🧹 remove old instance before re-rendering
+  }
 
-calendar = new Calendar(calendarEl, {
-
+  calendar = new Calendar(calendarEl, {
     initialView: 'dayGridMonth',
     locale: 'da',
     height: 'auto',
@@ -433,9 +436,6 @@ calendar = new Calendar(calendarEl, {
   calendar.render();
 }
 
-
-
-
 /* ---------- Load Events ---------- */
 async function loadEvents() {
   if (!eventsContainer) return;
@@ -447,16 +447,15 @@ async function loadEvents() {
     const twelveHoursAgo = now.getTime() - 12 * 60 * 60 * 1000;
 
     // Get only the 2 nearest upcoming events
-const eventsData = snapshot.docs
-  .map(docSnap => ({ id: docSnap.id, ...docSnap.data() }))
-  .filter(e => {
-    if (!e.date) return false;
-    const eventTime = new Date(e.date).getTime();
-    return eventTime >= twelveHoursAgo; // only future / recent
-  })
-  .sort((a, b) => new Date(a.date) - new Date(b.date)) // sort by soonest
-  .slice(0, 2); // ✅ only show 2 nearest
-
+    const eventsData = snapshot.docs
+      .map(docSnap => ({ id: docSnap.id, ...docSnap.data() }))
+      .filter(e => {
+        if (!e.date) return false;
+        const eventTime = new Date(e.date).getTime();
+        return eventTime >= twelveHoursAgo; // only future / recent
+      })
+      .sort((a, b) => new Date(a.date) - new Date(b.date)) // sort by soonest
+      .slice(0, 2); // ✅ only show 2 nearest
 
     // Fade out loader
     const loader = eventsContainer.querySelector(".fixed");
@@ -467,24 +466,24 @@ const eventsData = snapshot.docs
 
     // Clear container
     eventsContainer.innerHTML = "";
-eventsContainer.className = ""; // reset classes
+    eventsContainer.className = ""; // reset classes
 
-if (eventsData.length === 0) {
-  eventsContainer.className = "min-h-[100px] flex flex-col items-center justify-center text-center";
-  eventsContainer.innerHTML = `
-    <div class="text-gray-700">
-      <h2 class="western-text text-2xl md:text-3xl mb-1 tracking-wide text-gray-800">
-        Ingen Kommende Begivenheder
-      </h2>
-      <p class="text-base italic text-gray-500 mb-3">
-        Sadel op, partner... nye eventyr venter snart 🤠
-      </p>
-      <div class="animate-pulse h-1 w-24 bg-yellow-600 rounded-full mx-auto"></div>
-    </div>`;
-  return;
-} else {
-  eventsContainer.className = "grid grid-cols-1 md:grid-cols-2 gap-6";
-}
+    if (eventsData.length === 0) {
+      eventsContainer.className = "min-h-[100px] flex flex-col items-center justify-center text-center";
+      eventsContainer.innerHTML = `
+        <div class="text-gray-700">
+          <h2 class="western-text text-2xl md:text-3xl mb-1 tracking-wide text-gray-800">
+            Ingen Kommende Begivenheder
+          </h2>
+          <p class="text-base italic text-gray-500 mb-3">
+            Sadel op, partner... nye eventyr venter snart 🤠
+          </p>
+          <div class="animate-pulse h-1 w-24 bg-yellow-600 rounded-full mx-auto"></div>
+        </div>`;
+      return;
+    } else {
+      eventsContainer.className = "grid grid-cols-1 md:grid-cols-2 gap-6";
+    }
 
     // Render each event card
     for (const e of eventsData) {
@@ -581,60 +580,59 @@ if (eventsData.length === 0) {
         updateButton();
 
         joinBtn.onclick = async () => {
-  const eventRef = doc(db, "events", e.id);
-  joinBtn.disabled = true;
-  joinBtn.innerHTML = `<span class="flex items-center gap-1">⏳ ...</span>`;
+          const eventRef = doc(db, "events", e.id);
+          joinBtn.disabled = true;
+          joinBtn.innerHTML = `<span class="flex items-center gap-1">⏳ ...</span>`;
 
-  try {
-    let newParticipants;
+          try {
+            let newParticipants;
 
-    if (isJoined) {
-      if (!confirm("Er du sikker på du vil afmelde dig fra dette event?")) {
-        joinBtn.disabled = false;
-        updateButton();
-        return;
-      }
-      newParticipants = currentParticipants.filter(p => p.email !== userEmail);
-      await updateDoc(eventRef, { participants: newParticipants });
-      isJoined = false;
-    } else {
-      newParticipants = [...currentParticipants, { email: userEmail, name: userName }];
-      await updateDoc(eventRef, { participants: newParticipants });
-      isJoined = true;
-    }
+            if (isJoined) {
+              if (!confirm("Er du sikker på du vil afmelde dig fra dette event?")) {
+                joinBtn.disabled = false;
+                updateButton();
+                return;
+              }
+              newParticipants = currentParticipants.filter(p => p.email !== userEmail);
+              await updateDoc(eventRef, { participants: newParticipants });
+              isJoined = false;
+            } else {
+              newParticipants = [...currentParticipants, { email: userEmail, name: userName }];
+              await updateDoc(eventRef, { participants: newParticipants });
+              isJoined = true;
+            }
 
-    // 🟢 Immediately reflect changes locally in popup
-    e.participants = newParticipants;
-    updateButton();
+            // 🟢 Immediately reflect changes locally in popup
+            e.participants = newParticipants;
+            updateButton();
 
-    const participantsDiv = eventEl.querySelector(".deltagere");
-    if (participantsDiv) {
-      const visible = newParticipants.slice(0, 2).map(p => p.name || p.email);
-      const remaining = newParticipants.length - visible.length;
-      participantsDiv.innerHTML = `
-        <span class="font-semibold">Deltagere:</span>
-        ${
-          newParticipants.length === 0
-            ? " Ingen endnu"
-            : remaining > 0
-              ? `${visible.join(", ")} +${remaining}`
-              : visible.join(", ")
-        }
-      `;
-    }
+            const participantsDiv = eventEl.querySelector(".deltagere");
+            if (participantsDiv) {
+              const visible = newParticipants.slice(0, 2).map(p => p.name || p.email);
+              const remaining = newParticipants.length - visible.length;
+              participantsDiv.innerHTML = `
+                <span class="font-semibold">Deltagere:</span>
+                ${
+                  newParticipants.length === 0
+                    ? " Ingen endnu"
+                    : remaining > 0
+                      ? `${visible.join(", ")} +${remaining}`
+                      : visible.join(", ")
+                }
+              `;
+            }
 
-    // ✅ update main list + calendar quietly in background
-    loadEvents();
-    renderCalendar();
+            // ✅ update main list + calendar quietly in background
+            loadEvents();
+            renderCalendar();
 
-  } catch (err) {
-    console.error("❌ Fejl ved til-/afmelding:", err);
-    alert("Der opstod en fejl. Prøv igen.");
-  } finally {
-    joinBtn.disabled = false;
-  }
-};
-
+          } catch (err) {
+            console.error("❌ Fejl ved til-/afmelding:", err);
+            alert("Der opstod en fejl. Prøv igen.");
+          } finally {
+            joinBtn.disabled = false;
+          }
+        };
       });
 
       // Admin controls (edit/delete)
@@ -677,13 +675,11 @@ window.addEventListener("DOMContentLoaded", () => {
   }, 1000);
 });
 
-
 window.addEventListener('DOMContentLoaded', () => {
   // Show spinner immediately before loading events
   showThrobber();
   setTimeout(loadEvents, 1000);
 });
-
 
 window.addEventListener('DOMContentLoaded', () => {
   showThrobber();
@@ -692,7 +688,6 @@ window.addEventListener('DOMContentLoaded', () => {
     await renderCalendar();
   }, 1000);
 });
-
 
 /* ---------- Popup Controls ---------- */
 document.getElementById("open-create-popup")?.addEventListener("click", () => openCreatePopup());
@@ -792,9 +787,17 @@ saveBtn?.addEventListener("click", async () => {
         location,
         description,
       });
+
+      /* 🔔 Global notification for updated event */
+      await sendGlobalNotification(
+        "Event Opdateret",
+        `Event '${title}' er blevet opdateret.`,
+        "event_updated"
+      );
+
       alert("Event opdateret!");
     } else {
-      await addDoc(collection(db, "events"), {
+      const newEventRef = await addDoc(collection(db, "events"), {
         title,
         date: fullDateTime.toISOString(),
         location,
@@ -802,6 +805,14 @@ saveBtn?.addEventListener("click", async () => {
         participants: [],
         createdAt: new Date(),
       });
+
+      /* 🔔 Global notification for new event */
+      await sendGlobalNotification(
+        "Nyt Event Oprettet",
+        `Event '${title}' er blevet oprettet.`,
+        "event_created"
+      );
+
       alert("Event oprettet!");
     }
     closePopup();
@@ -812,11 +823,6 @@ saveBtn?.addEventListener("click", async () => {
     alert("Fejl: " + err.message);
   }
 });
-
-
-
-
-
 
 /* ---------- Admin button visibility ---------- */
 document.addEventListener("DOMContentLoaded", () => {
@@ -845,7 +851,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 });
 
-
 /* ---------- Background Click Closes Popup ---------- */
 document.getElementById("view-event-popup").addEventListener("click", (e) => {
   if (e.target.id === "view-event-popup") {
@@ -854,6 +859,19 @@ document.getElementById("view-event-popup").addEventListener("click", (e) => {
   }
 });
 
+/* ---------- Admin UI Controls ---------- */
+window.enableAdminUI = function () {
+  const adminBtn = document.getElementById("admin-create-btn");
+  if (adminBtn) adminBtn.classList.remove("hidden");
+  console.log("[events] ✅ Admin UI enabled");
+};
+
+window.disableAdminUI = function () {
+  const adminBtn = document.getElementById("admin-create-btn");
+  if (adminBtn) adminBtn.classList.add("hidden");
+  console.log("[events] 🚫 Admin UI disabled");
+};
 </script>
 
-
+</body>
+</html>
